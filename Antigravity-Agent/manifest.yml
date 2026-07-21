@@ -1,0 +1,29 @@
+modules:
+  jira:issuePanel:
+    - key: antigravity-agent-hello-world-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Antigravity Agent
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/2cbbd697-90ae-4afe-8376-f96d519c861a
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+  external:
+    fetch:
+      client:
+        - aiplatform.googleapis.com/v1beta1/projects/devproductivity-3145-8712/locations/global/interactions
