@@ -16,7 +16,9 @@
 
 ## 🛠️ Architecture
 
-For a detailed sequence diagram and breakdown of component interactions (Jira UI Panel $\rightarrow$ Forge Backend Resolvers $\rightarrow$ Vertex AI Interactions API $\rightarrow$ Jira REST API), see [ARCHITECTURE.md](file:///usr/local/google/home/andreyshakirov/work/projects/jira-managed-agents/Antigravity-Agent/ARCHITECTURE.md).
+![Antigravity Agent Flow](./flow.png)
+
+For a detailed sequence diagram and breakdown of component interactions (Jira UI Panel $\rightarrow$ Forge Backend Resolvers $\rightarrow$ Vertex AI Interactions API $\rightarrow$ Jira REST API), see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 
