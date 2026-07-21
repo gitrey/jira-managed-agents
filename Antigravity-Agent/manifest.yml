@@ -1,6 +1,6 @@
 modules:
   jira:issuePanel:
-    - key: antigravity-agent-hello-world-issue-panel
+    - key: antigravity-agent-issue-panel
       resource: main
       resolver:
         function: resolver
@@ -25,5 +25,5 @@ permissions:
     - write:jira-work
   external:
     fetch:
-      client:
-        - aiplatform.googleapis.com/v1beta1/projects/devproductivity-3145-8712/locations/global/interactions
+      backend:
+        - 'aiplatform.googleapis.com'

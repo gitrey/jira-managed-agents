@@ -1,39 +1,109 @@
-# Forge Hello World
+# Antigravity Agent - Forge Jira Issue Panel App
 
-This project contains a Forge app written in Javascript that displays `Hello World!` in a Jira issue panel. 
+**Antigravity Agent** is an Atlassian Forge app that automatically reviews Jira story requirements using the **Google Vertex AI Interactions API**. It provides real-time progress feedback in a Jira issue panel and publishes comprehensive requirement reviews directly as native Jira issue comments.
 
-See [developer.atlassian.com/platform/forge/](https://developer.atlassian.com/platform/forge) for documentation and tutorials explaining Forge.
+---
 
-## Requirements
+## 🚀 Features
 
-See [Set up Forge](https://developer.atlassian.com/platform/forge/set-up-forge/) for instructions to get set up.
+- **Automated Story Requirement Reviews:** Fetches issue details and evaluates story requirements using Google Vertex AI Agents.
+- **Non-Blocking Architecture:** Uses background interaction execution and polling to stay well under Forge's 25-second function timeout limit.
+- **Live Thought Stream:** Periodically polls for agent updates and renders real-time execution thoughts directly in the issue panel UI.
+- **Native Rich Text Comments:** Converts Markdown reviews into Jira Wiki Markup (`h3.`, `*bold*`, `{code}`) to post formatted comments to Jira issues.
+- **Forge UI Kit Rendering:** Built with `@forge/react` UI Kit components (`Heading`, `List`, `CodeBlock`, `Stack`) for a clean native Atlassian experience.
 
-## Quick start
+---
 
-- Modify your app frontend by editing the `src/frontend/index.jsx` file.
+## 🛠️ Architecture
 
-- Modify your app backend by editing the `src/resolvers/index.js` file to define resolver functions. See [Forge resolvers](https://developer.atlassian.com/platform/forge/runtime-reference/custom-ui-resolver/) for documentation on resolver functions.
+For a detailed sequence diagram and breakdown of component interactions (Jira UI Panel $\rightarrow$ Forge Backend Resolvers $\rightarrow$ Vertex AI Interactions API $\rightarrow$ Jira REST API), see [ARCHITECTURE.md](file:///usr/local/google/home/andreyshakirov/work/projects/jira-managed-agents/Antigravity-Agent/ARCHITECTURE.md).
 
-- Build and deploy your app by running:
+---
+
+## 📋 Prerequisites & Configuration
+
+Create new Forge application. [Create a Forge app](https://developer.atlassian.com/platform/forge/getting-started/#build-your-first-forge-app)
+
+### Environment Variables
+
+Create Forge API token here [Create an API token](https://id.atlassian.com/manage/api-tokens)
+
+```bash
+export FORGE_EMAIL=YOUR_EMAIL
+export FORGE_API_TOKEN=YOUR_API_TOKEN
 ```
+
+Check that you are logged in with:
+
+```bash
+forge whoami
+```
+
+```bash
+export PROJECT_ID="your-project-id"
+export AGENT_ID="your-agent-id" # "projects/123456789/locations/global/agents/agent-name"
+export ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+```
+
+The backend resolver requires the following Forge environment variables to authenticate with Google Vertex AI:
+
+```bash
+forge variables set --encrypt ACCESS_TOKEN <your-vertex-access-token>
+forge variables set AGENT_ID <your-vertex-agent-id>
+forge variables set PROJECT_ID <your-gcp-project-id>
+```
+
+### Manifest Permissions & Egress
+
+The app requires:
+- **Jira Scopes:** `read:jira-work`, `write:jira-work`
+- **External Egress:** `aiplatform.googleapis.com` (configured under `permissions.external.fetch.backend` in `manifest.yml`)
+
+---
+
+## 🚦 Getting Started
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Lint & Validate Manifest
+```bash
+forge lint
+```
+
+### 3. Deploy the App
+Deploy the app to your development environment:
+```bash
 forge deploy
 ```
 
-- Install your app in an Atlassian site by running:
-```
+### 4. Install on Jira Site
+Install the app to your Atlassian site:
+```bash
 forge install
 ```
 
-- Develop your app by running `forge tunnel` to proxy invocations locally:
-```
+### 5. Local Tunneling (Development)
+Run local tunneling to hot-reload frontend and resolver changes:
+```bash
 forge tunnel
 ```
 
-### Notes
-- Use the `forge deploy` command when you want to persist code changes.
-- Use the `forge install` command when you want to install the app on a new site.
-- Once the app is installed on a site, the site picks up the new app changes you deploy without needing to rerun the install command.
+---
 
-## Support
+## 📁 Project Structure
 
-See [Get help](https://developer.atlassian.com/platform/forge/get-help/) for how to get help and provide feedback.
+```
+Antigravity-Agent/
+├── ARCHITECTURE.md       # Sequence diagram and design notes
+├── README.md             # Project documentation
+├── manifest.yml          # Forge app manifest & permissions
+├── package.json          # Node dependencies & metadata
+└── src/
+    ├── frontend/
+    │   └── index.jsx     # Forge UI Kit issue panel component
+    └── resolvers/
+        └── index.js      # Forge backend resolvers for Interactions API
+```
