@@ -20,7 +20,7 @@ modules:
         function: resolver
       render: native
       title: Antigravity Agent
-      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      icon: https://raw.githubusercontent.com/gitrey/jira-managed-agents/main/Antigravity-Agent/static/icon.png
   function:
     - key: resolver
       handler: index.handler
