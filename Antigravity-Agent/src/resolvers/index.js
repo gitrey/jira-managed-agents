@@ -1,33 +1,50 @@
-import Resolver from '@forge/resolver';
-import api from '@forge/api';
-import crypto from 'crypto';
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import Resolver from "@forge/resolver";
+import api from "@forge/api";
+import crypto from "crypto";
 
 const resolver = new Resolver();
 
 /**
  * Base64Url encoder according to RFC 7515 specifications.
  * Converts string or Buffer data to URL-safe base64 without padding.
- * 
+ *
  * @param {string|Buffer} input - Text string or binary buffer to encode
  * @returns {string} Base64Url encoded string
  */
 function base64UrlEncode(input) {
-  const buf = typeof input === 'string' ? Buffer.from(input, 'utf-8') : input;
-  return buf.toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
+  return buf
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
 /**
  * Fetches an OAuth 2.0 access token for authenticating with GCP APIs.
- * 
+ *
  * Logic flow:
  * 1. Checks if GCP_SERVICE_ACCOUNT_KEY environment variable is defined.
  * 2. If defined, parses the service account JSON, builds a signed RSA-256 JWT claim set,
  *    and exchanges it with `https://oauth2.googleapis.com/token`.
  * 3. Fallback: If GCP_SERVICE_ACCOUNT_KEY is not defined, uses ACCESS_TOKEN environment variable.
- * 
+ *
  * @returns {Promise<string>} Valid OAuth 2.0 access token
  */
 async function getAccessToken() {
@@ -35,26 +52,29 @@ async function getAccessToken() {
 
   if (serviceAccountKeyRaw) {
     try {
-      const sa = typeof serviceAccountKeyRaw === 'string'
-        ? JSON.parse(serviceAccountKeyRaw)
-        : serviceAccountKeyRaw;
+      const sa =
+        typeof serviceAccountKeyRaw === "string"
+          ? JSON.parse(serviceAccountKeyRaw)
+          : serviceAccountKeyRaw;
 
       const clientEmail = sa.client_email;
       const privateKey = sa.private_key;
 
       if (!clientEmail || !privateKey) {
-        throw new Error('GCP_SERVICE_ACCOUNT_KEY missing client_email or private_key.');
+        throw new Error(
+          "GCP_SERVICE_ACCOUNT_KEY missing client_email or private_key.",
+        );
       }
 
       // Build standard OAuth 2.0 JWT claim set for Google Cloud APIs
       const now = Math.floor(Date.now() / 1000);
-      const header = { alg: 'RS256', typ: 'JWT' };
+      const header = { alg: "RS256", typ: "JWT" };
       const claimSet = {
         iss: clientEmail,
-        scope: 'https://www.googleapis.com/auth/cloud-platform',
-        aud: 'https://oauth2.googleapis.com/token',
+        scope: "https://www.googleapis.com/auth/cloud-platform",
+        aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
-        iat: now
+        iat: now,
       };
 
       const encodedHeader = base64UrlEncode(JSON.stringify(header));
@@ -62,7 +82,7 @@ async function getAccessToken() {
       const unsignedJwt = `${encodedHeader}.${encodedClaimSet}`;
 
       // Sign JWT assertion using standard Node.js crypto module
-      const signer = crypto.createSign('RSA-SHA256');
+      const signer = crypto.createSign("RSA-SHA256");
       signer.update(unsignedJwt);
       const signature = signer.sign(privateKey);
       const encodedSignature = base64UrlEncode(signature);
@@ -70,26 +90,31 @@ async function getAccessToken() {
       const signedJwt = `${unsignedJwt}.${encodedSignature}`;
 
       // Request fresh access token from Google OAuth endpoint
-      const tokenRes = await api.fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
+      const tokenRes = await api.fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-          assertion: signedJwt
-        }).toString()
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion: signedJwt,
+        }).toString(),
       });
 
       if (!tokenRes.ok) {
         const tokenErrText = await tokenRes.text();
-        throw new Error(`Google OAuth token exchange failed (Status ${tokenRes.status}): ${tokenErrText}`);
+        throw new Error(
+          `Google OAuth token exchange failed (Status ${tokenRes.status}): ${tokenErrText}`,
+        );
       }
 
       const tokenData = await tokenRes.json();
       return tokenData.access_token;
     } catch (err) {
-      console.error('Error deriving OAuth access token from GCP_SERVICE_ACCOUNT_KEY:', err);
+      console.error(
+        "Error deriving OAuth access token from GCP_SERVICE_ACCOUNT_KEY:",
+        err,
+      );
       throw err;
     }
   }
@@ -100,11 +125,22 @@ async function getAccessToken() {
     return staticToken;
   }
 
-  throw new Error('No GCP authentication configured. Please set GCP_SERVICE_ACCOUNT_KEY or ACCESS_TOKEN environment variable.');
+  throw new Error(
+    "No GCP authentication configured. Please set GCP_SERVICE_ACCOUNT_KEY or ACCESS_TOKEN environment variable.",
+  );
 }
 
-// 1. Start interaction (returns immediately with interactionId)
-resolver.define('startReviewStory', async (req) => {
+/**
+ * Backend Resolver: startReviewStory
+ *
+ * Initiates an asynchronous agent interaction with Google Vertex AI Interactions API.
+ * The call sets `background: true` so the endpoint returns immediately with an `interactionId`,
+ * ensuring backend execution completes well within Forge's 25-second function execution limit.
+ *
+ * @param {Object} req - Resolver request object containing payload with story description
+ * @returns {Promise<Object>} Object containing interactionId and status, or error details
+ */
+resolver.define("startReviewStory", async (req) => {
   try {
     const { description } = req.payload;
 
@@ -118,35 +154,47 @@ resolver.define('startReviewStory', async (req) => {
       agent: agentId,
       background: true,
       input: {
-        type: 'text',
-        text: `Review this story requirements: ${description}`
-      }
+        type: "text",
+        text: `Review this story requirements: ${description}`,
+      },
     });
 
     const createRes = await api.fetch(agentUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      body: bodyGenerateData
+      body: bodyGenerateData,
     });
 
     if (!createRes.ok) {
       const errText = await createRes.text();
-      return { error: `Failed to start agent (Status ${createRes.status}): ${errText}` };
+      return {
+        error: `Failed to start agent (Status ${createRes.status}): ${errText}`,
+      };
     }
 
     const interaction = await createRes.json();
     return { interactionId: interaction.id, status: interaction.status };
   } catch (err) {
-    console.error('Error starting reviewStory:', err);
+    console.error("Error starting reviewStory:", err);
     return { error: `Backend error: ${err.message || err}` };
   }
 });
 
-// 2. Check interaction status (returns status, clean final text if completed, or latestMessage if in_progress)
-resolver.define('checkReviewStatus', async (req) => {
+/**
+ * Backend Resolver: checkReviewStatus
+ *
+ * Polls the Google Vertex AI Interactions API for a specific interaction by ID.
+ * Returns either:
+ * - Status 'completed' with cleaned full model output text once complete.
+ * - Status 'in_progress' with the latest model output thought snippet for live progress feedback.
+ *
+ * @param {Object} req - Resolver request object containing payload with interactionId
+ * @returns {Promise<Object>} Object containing status, text/latestMessage, or error details
+ */
+resolver.define("checkReviewStatus", async (req) => {
   try {
     const { interactionId } = req.payload;
 
@@ -156,26 +204,28 @@ resolver.define('checkReviewStatus', async (req) => {
     const getUrl = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/global/interactions/${interactionId}`;
 
     const getRes = await api.fetch(getUrl, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
     });
 
     if (!getRes.ok) {
       const errText = await getRes.text();
-      return { error: `Failed to check status (Status ${getRes.status}): ${errText}` };
+      return {
+        error: `Failed to check status (Status ${getRes.status}): ${errText}`,
+      };
     }
 
     const getJson = await getRes.json();
     const status = getJson.status;
     const steps = getJson.steps || [];
 
-    if (status === 'completed') {
+    if (status === "completed") {
       const modelTexts = [];
       for (const step of steps) {
-        if (step.type === 'model_output') {
+        if (step.type === "model_output") {
           for (const c of step.content || []) {
             if (c.text) {
               modelTexts.push(c.text);
@@ -185,22 +235,24 @@ resolver.define('checkReviewStatus', async (req) => {
       }
 
       // 1. Join stream chunks directly with empty string '' to prevent broken mid-sentence newlines
-      let fullOutput = modelTexts.join('');
+      let fullOutput = modelTexts.join("");
 
       // 2. Strip out preliminary progress/thinking logs if final review heading exists
-      const reviewStartIndex = fullOutput.search(/(###|Here is|1\.\s+High-Level|1\.\s+Functional|\*\*Current Story)/i);
+      const reviewStartIndex = fullOutput.search(
+        /(###|Here is|1\.\s+High-Level|1\.\s+Functional|\*\*Current Story)/i,
+      );
       if (reviewStartIndex > 0) {
         fullOutput = fullOutput.substring(reviewStartIndex).trim();
       }
 
-      return { status: 'completed', text: fullOutput || 'Review completed.' };
+      return { status: "completed", text: fullOutput || "Review completed." };
     }
 
     // Extract the most recent agent thought / progress message for live feedback
-    let latestMessage = '';
+    let latestMessage = "";
     for (let i = steps.length - 1; i >= 0; i--) {
       const step = steps[i];
-      if (step.type === 'model_output') {
+      if (step.type === "model_output") {
         for (const c of step.content || []) {
           if (c.text) {
             latestMessage = c.text;
@@ -212,12 +264,12 @@ resolver.define('checkReviewStatus', async (req) => {
     }
 
     return {
-      status: status || 'in_progress',
+      status: status || "in_progress",
       stepCount: steps.length,
-      latestMessage: latestMessage || 'Analyzing requirements...'
+      latestMessage: latestMessage || "Analyzing requirements...",
     };
   } catch (err) {
-    console.error('Error checking reviewStory status:', err);
+    console.error("Error checking reviewStory status:", err);
     return { error: `Backend error: ${err.message || err}` };
   }
 });
