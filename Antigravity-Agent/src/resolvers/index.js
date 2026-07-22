@@ -133,7 +133,7 @@ async function getAccessToken() {
 /**
  * Backend Resolver: startReviewStory
  *
- * Initiates an asynchronous agent interaction with Google Vertex AI Interactions API.
+ * Initiates an asynchronous agent interaction with Google Agent Platform Interactions API.
  * The call sets `background: true` so the endpoint returns immediately with an `interactionId`,
  * ensuring backend execution completes well within Forge's 25-second function execution limit.
  *
@@ -186,7 +186,7 @@ resolver.define("startReviewStory", async (req) => {
 /**
  * Backend Resolver: checkReviewStatus
  *
- * Polls the Google Vertex AI Interactions API for a specific interaction by ID.
+ * Polls the Google Agent Platform Interactions API for a specific interaction by ID.
  * Returns either:
  * - Status 'completed' with cleaned full model output text once complete.
  * - Status 'in_progress' with the latest model output thought snippet for live progress feedback.

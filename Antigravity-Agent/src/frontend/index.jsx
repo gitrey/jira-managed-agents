@@ -209,7 +209,7 @@ const App = () => {
    * 1. Fetches issue details (description) via requestJira REST API.
    * 2. Checks Jira Issue Property (`antigravity_review`) to verify if a review already exists for this exact description.
    * 3. If cached review matches current description (and forced is false), loads review instantly from storage.
-   * 4. If description changed or forced is true, calls backend resolver `startReviewStory` to start Vertex AI Agent interaction.
+   * 4. If description changed or forced is true, calls backend resolver `startReviewStory` to start Agent Platform Agent interaction.
    * 5. Periodically polls `checkReviewStatus` backend resolver to render progress thoughts.
    * 6. Saves finished review and description to Jira Issue Property and posts native Jira issue comment.
    *

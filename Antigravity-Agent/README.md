@@ -1,12 +1,12 @@
 # Antigravity Agent - Forge Jira Issue Panel App
 
-**Antigravity Agent** is an Atlassian Forge app that automatically reviews Jira story requirements using the **Google Vertex AI Interactions API**. It provides real-time progress feedback in a Jira issue panel and publishes comprehensive requirement reviews directly as native Jira issue comments.
+**Antigravity Agent** is an Atlassian Forge app that automatically reviews Jira story requirements using the **Google Agent Platform Interactions API**. It provides real-time progress feedback in a Jira issue panel and publishes comprehensive requirement reviews directly as native Jira issue comments.
 
 ---
 
 ## 🚀 Features
 
-- **Automated Story Requirement Reviews:** Fetches issue details and evaluates story requirements using Google Vertex AI Agents.
+- **Automated Story Requirement Reviews:** Fetches issue details and evaluates story requirements using Google Agent Platform Agents.
 - **Non-Blocking Architecture:** Uses background interaction execution and polling to stay well under Forge's 25-second function timeout limit.
 - **Live Thought Stream:** Periodically polls for agent updates and renders real-time execution thoughts directly in the issue panel UI.
 - **Native Rich Text Comments:** Converts Markdown reviews into Jira Wiki Markup (`h3.`, `*bold*`, `{code}`) to post formatted comments to Jira issues.
@@ -18,7 +18,7 @@
 
 ![Antigravity Agent Flow](./flow.png)
 
-For a detailed sequence diagram and breakdown of component interactions (Jira UI Panel $\rightarrow$ Forge Backend Resolvers $\rightarrow$ Vertex AI Interactions API $\rightarrow$ Jira REST API), see [ARCHITECTURE.md](./ARCHITECTURE.md).
+For a detailed sequence diagram and breakdown of component interactions (Jira UI Panel $\rightarrow$ Forge Backend Resolvers $\rightarrow$ Agent Platform Interactions API $\rightarrow$ Jira REST API), see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 
@@ -37,7 +37,7 @@ All GCP authentication operations run 100% server-side inside Atlassian Forge's 
 The issue panel uses Jira Issue Property state (`antigravity_review`) to handle review caching and automatic re-evaluations:
 
 - **Page Reload / Closing & Reopening Panel (Requirements Unchanged):** The app checks the saved Jira Issue Property. If the cached `description` matches the current issue description, it loads instantly from storage **without invoking the agent**.
-- **Editing Story Requirements / Description:** When the story description is updated in Jira, the app detects the requirement change (`cachedDescription !== currentDescription`), automatically calls the Vertex AI agent to re-evaluate the updated story, posts a new Jira comment, and updates the saved panel state.
+- **Editing Story Requirements / Description:** When the story description is updated in Jira, the app detects the requirement change (`cachedDescription !== currentDescription`), automatically calls the Agent Platform agent to re-evaluate the updated story, posts a new Jira comment, and updates the saved panel state.
 - **Manual Re-Run:** Clicking the **"Re-run Agent Review"** button in the panel bypasses the cache and forces a fresh agent evaluation at any time.
 
 ---
@@ -67,7 +67,7 @@ export AGENT_ID="your-agent-id" # "projects/123456789/locations/global/agents/ag
 export ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
 ```
 
-The backend resolver supports two authentication methods for Google Vertex AI:
+The backend resolver supports two authentication methods for Google Agent Platform:
 
 #### 1. GCP Service Account Key (If Key Creation is Allowed)
 *Note: If your GCP organization enforces `constraints/iam.disableServiceAccountKeyCreation`, skip to Option 2 below.*
