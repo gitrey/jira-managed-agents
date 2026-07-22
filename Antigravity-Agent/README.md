@@ -32,6 +32,16 @@ All GCP authentication operations run 100% server-side inside Atlassian Forge's 
 
 ---
 
+## ⚡ Smart Caching & Review Execution Flow
+
+The issue panel uses Jira Issue Property state (`antigravity_review`) to handle review caching and automatic re-evaluations:
+
+- **Page Reload / Closing & Reopening Panel (Requirements Unchanged):** The app checks the saved Jira Issue Property. If the cached `description` matches the current issue description, it loads instantly from storage **without invoking the agent**.
+- **Editing Story Requirements / Description:** When the story description is updated in Jira, the app detects the requirement change (`cachedDescription !== currentDescription`), automatically calls the Vertex AI agent to re-evaluate the updated story, posts a new Jira comment, and updates the saved panel state.
+- **Manual Re-Run:** Clicking the **"Re-run Agent Review"** button in the panel bypasses the cache and forces a fresh agent evaluation at any time.
+
+---
+
 ## 📋 Prerequisites & Configuration
 
 Create new Forge application. [Create a Forge app](https://developer.atlassian.com/platform/forge/getting-started/#build-your-first-forge-app)

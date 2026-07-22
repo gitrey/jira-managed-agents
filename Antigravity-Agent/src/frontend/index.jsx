@@ -1,6 +1,8 @@
 import React from 'react';
-import ForgeReconciler, { Text, Heading, CodeBlock, List, ListItem, Stack, useProductContext } from '@forge/react';
+import ForgeReconciler, { Text, Heading, CodeBlock, List, ListItem, Stack, Button, Inline, useProductContext } from '@forge/react';
 import { requestJira, invoke } from '@forge/bridge';
+
+const PROPERTY_KEY = 'antigravity_review';
 
 // Convert standard Markdown to Jira Wiki Markup for native rich comment rendering
 const markdownToJiraWiki = (md) => {
@@ -108,23 +110,31 @@ const renderMarkdown = (text) => {
 const App = () => {
   const context = useProductContext();
   const [description, setDescription] = React.useState('Initializing agent review...');
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [hasCompleted, setHasCompleted] = React.useState(false);
 
-  const processStoryReview = async () => {
+  const issueId = 
+    context?.extension?.issue?.id || 
+    context?.extension?.issue?.key ||
+    context?.extension?.issueId ||
+    context?.extension?.issueKey;
+
+  const runAgentReview = async (forced = false) => {
+    if (!issueId) {
+      setDescription('No issue context available.');
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      const issueId = 
-        context?.extension?.issue?.id || 
-        context?.extension?.issue?.key ||
-        context?.extension?.issueId ||
-        context?.extension?.issueKey;
-
-      if (!issueId) {
-        return 'No issue context available.';
-      }
-
-      // 1. Get issue details from Jira
+      // 1. Fetch current issue details from Jira
+      setDescription('Fetching issue details...');
       const res = await requestJira(`/rest/api/2/issue/${issueId}`);
       if (!res.ok) {
-        return `Failed to fetch issue details (Status: ${res.status})`;
+        setDescription(`Failed to fetch issue details (Status: ${res.status})`);
+        setIsLoading(false);
+        return;
       }
       const data = await res.json();
 
@@ -133,36 +143,73 @@ const App = () => {
         ? rawDescription
         : (rawDescription ? JSON.stringify(rawDescription) : 'No description provided');
 
-      // 2. Start agent interaction
-      setDescription('Starting agent review...');
+      // 2. Check if a cached review exists AND the story description has NOT changed
+      if (!forced) {
+        try {
+          const propRes = await requestJira(`/rest/api/2/issue/${issueId}/properties/${PROPERTY_KEY}`);
+          if (propRes.ok) {
+            const propJson = await propRes.json();
+            // Only use cached review if description matches current issue description
+            if (propJson.value?.review && propJson.value?.description === issueDescription) {
+              setDescription(propJson.value.review);
+              setHasCompleted(true);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Property check failed:', e);
+        }
+      }
+
+      // 3. Story description changed or forced re-run -> Invoke agent for review
+      setDescription('Starting agent review for updated requirements...');
       const startRes = await invoke('startReviewStory', {
         description: issueDescription
       });
 
       if (startRes.error) {
-        return startRes.error;
+        setDescription(startRes.error);
+        setIsLoading(false);
+        return;
       }
 
       const interactionId = startRes.interactionId;
       setDescription('Agent is reviewing story requirements... Please wait.');
 
-      // 3. Poll status from frontend (every 4 seconds) and show descriptive progress
+      // 4. Poll status from frontend (every 4 seconds) and show descriptive progress
       const maxAttempts = 30; // Up to 2 minutes
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         await new Promise((r) => setTimeout(r, 4000));
 
         const statusRes = await invoke('checkReviewStatus', { interactionId });
         if (statusRes.error) {
-          return statusRes.error;
+          setDescription(statusRes.error);
+          setIsLoading(false);
+          return;
         }
 
         if (statusRes.status === 'completed') {
           const reviewText = statusRes.text;
 
+          // Save review AND current description to Jira Issue Property
+          await requestJira(`/rest/api/2/issue/${issueId}/properties/${PROPERTY_KEY}`, {
+            method: 'PUT',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              review: reviewText,
+              description: issueDescription,
+              updatedAt: new Date().toISOString()
+            })
+          });
+
           // Convert Markdown to Jira Wiki Markup for Jira comment REST API
           const wikiMarkupBody = markdownToJiraWiki(reviewText);
 
-          // 4. Add review comment to Jira issue using native Jira Wiki Markup
+          // Add review comment to Jira issue using native Jira Wiki Markup
           await requestJira(`/rest/api/2/issue/${issueId}/comment`, {
             method: 'POST',
             headers: {
@@ -172,30 +219,42 @@ const App = () => {
             body: JSON.stringify({ body: wikiMarkupBody })
           });
 
-          return reviewText;
+          setDescription(reviewText);
+          setHasCompleted(true);
+          setIsLoading(false);
+          return;
         }
 
         const currentMessage = statusRes.latestMessage || `Agent review in progress (step ${attempt + 1})...`;
         setDescription(currentMessage);
       }
 
-      return 'Agent review took longer than expected. Check Jira issue comments in a few moments.';
+      setDescription('Agent review took longer than expected. Check Jira issue comments in a few moments.');
     } catch (err) {
       console.error('Error processing story review:', err);
-      return `Error: ${err.message || err}`;
+      setDescription(`Error: ${err.message || err}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   React.useEffect(() => {
-    if (context) {
-      processStoryReview().then(setDescription);
+    if (context && issueId) {
+      runAgentReview(false);
     }
-  }, [context]);
+  }, [context, issueId]);
 
   return (
-    <>
+    <Stack space="space.200">
       {renderMarkdown(description)}
-    </>
+      {hasCompleted && !isLoading && (
+        <Inline alignInline="end">
+          <Button appearance="subtle" onClick={() => runAgentReview(true)}>
+            Re-run Agent Review
+          </Button>
+        </Inline>
+      )}
+    </Stack>
   );
 };
 
