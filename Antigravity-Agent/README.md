@@ -22,6 +22,16 @@ For a detailed sequence diagram and breakdown of component interactions (Jira UI
 
 ---
 
+## 🔒 Security & Server-Side Authentication
+
+All GCP authentication operations run 100% server-side inside Atlassian Forge's secure backend FaaS environment ([src/resolvers/index.js](./src/resolvers/index.js)):
+
+- **Zero Secret Exposure:** Credentials (`GCP_SERVICE_ACCOUNT_KEY`, `ACCESS_TOKEN`) are stored in encrypted Forge secret storage. Private RSA keys and OAuth access tokens are never transmitted to or accessible by the client browser.
+- **Server-Side JWT Signing:** When configured with `GCP_SERVICE_ACCOUNT_KEY`, the backend resolver uses Node.js `crypto` to generate and sign an RSA-256 JWT assertion, exchanging it with `https://oauth2.googleapis.com/token` for dynamic access tokens.
+- **Strict Egress Controls:** External network access is strictly declared in `manifest.yml` and restricted to `aiplatform.googleapis.com` and `oauth2.googleapis.com`.
+
+---
+
 ## 📋 Prerequisites & Configuration
 
 Create new Forge application. [Create a Forge app](https://developer.atlassian.com/platform/forge/getting-started/#build-your-first-forge-app)
@@ -47,19 +57,57 @@ export AGENT_ID="your-agent-id" # "projects/123456789/locations/global/agents/ag
 export ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
 ```
 
-The backend resolver requires the following Forge environment variables to authenticate with Google Vertex AI:
+The backend resolver supports two authentication methods for Google Vertex AI:
+
+#### 1. GCP Service Account Key (If Key Creation is Allowed)
+*Note: If your GCP organization enforces `constraints/iam.disableServiceAccountKeyCreation`, skip to Option 2 below.*
 
 ```bash
-forge variables set --encrypt ACCESS_TOKEN <your-vertex-access-token>
+# Set your GCP Project ID
+export PROJECT_ID="your-gcp-project-id"
+
+# 1. Create a Service Account
+gcloud iam service-accounts create jira-antigravity-agent \
+  --description="Service Account for JIRA Antigravity Agent" \
+  --display-name="JIRA Antigravity Agent SA"
+
+# 2. Grant Agent Platform User role to the Service Account
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:jira-antigravity-agent@$PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user" \
+  --condition=None
+
+# Disable key creation restriction on your project
+# gcloud resource-manager org-policies disable-enforce iam.disableServiceAccountKeyCreation --project=$PROJECT_ID
+
+# 3. Create and download the Service Account Key JSON file
+gcloud iam service-accounts keys create service-account-key.json \
+  --iam-account="jira-antigravity-agent@$PROJECT_ID.iam.gserviceaccount.com"
+
+# 4. Set encrypted Forge environment variables
+forge variables set --encrypt GCP_SERVICE_ACCOUNT_KEY "$(cat service-account-key.json)"
 forge variables set AGENT_ID <your-vertex-agent-id>
-forge variables set PROJECT_ID <your-gcp-project-id>
+forge variables set PROJECT_ID $PROJECT_ID
+```
+
+#### 2. Access Token Authentication (When Key Creation is Disabled by Org Policy)
+When Service Account key creation is restricted by GCP Organization Policy, generate a short-lived OAuth 2.0 access token (or Service Account impersonation access token) and set it in Forge:
+
+```bash
+export PROJECT_ID="devproductivity-3145-8712"
+export AGENT_ID="your-vertex-agent-id"
+
+# Generate access token (User OAuth token or Service Account Impersonation token)
+forge variables set --encrypt ACCESS_TOKEN "$(gcloud auth print-access-token)"
+forge variables set AGENT_ID "$AGENT_ID"
+forge variables set PROJECT_ID "$PROJECT_ID"
 ```
 
 ### Manifest Permissions & Egress
 
 The app requires:
 - **Jira Scopes:** `read:jira-work`, `write:jira-work`
-- **External Egress:** `aiplatform.googleapis.com` (configured under `permissions.external.fetch.backend` in `manifest.yml`)
+- **External Egress:** `aiplatform.googleapis.com`, `oauth2.googleapis.com` (configured under `permissions.external.fetch.backend` in `manifest.yml`)
 
 ---
 

@@ -1,7 +1,107 @@
 import Resolver from '@forge/resolver';
 import api from '@forge/api';
+import crypto from 'crypto';
 
 const resolver = new Resolver();
+
+/**
+ * Base64Url encoder according to RFC 7515 specifications.
+ * Converts string or Buffer data to URL-safe base64 without padding.
+ * 
+ * @param {string|Buffer} input - Text string or binary buffer to encode
+ * @returns {string} Base64Url encoded string
+ */
+function base64UrlEncode(input) {
+  const buf = typeof input === 'string' ? Buffer.from(input, 'utf-8') : input;
+  return buf.toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+/**
+ * Fetches an OAuth 2.0 access token for authenticating with GCP APIs.
+ * 
+ * Logic flow:
+ * 1. Checks if GCP_SERVICE_ACCOUNT_KEY environment variable is defined.
+ * 2. If defined, parses the service account JSON, builds a signed RSA-256 JWT claim set,
+ *    and exchanges it with `https://oauth2.googleapis.com/token`.
+ * 3. Fallback: If GCP_SERVICE_ACCOUNT_KEY is not defined, uses ACCESS_TOKEN environment variable.
+ * 
+ * @returns {Promise<string>} Valid OAuth 2.0 access token
+ */
+async function getAccessToken() {
+  const serviceAccountKeyRaw = process.env.GCP_SERVICE_ACCOUNT_KEY;
+
+  if (serviceAccountKeyRaw) {
+    try {
+      const sa = typeof serviceAccountKeyRaw === 'string'
+        ? JSON.parse(serviceAccountKeyRaw)
+        : serviceAccountKeyRaw;
+
+      const clientEmail = sa.client_email;
+      const privateKey = sa.private_key;
+
+      if (!clientEmail || !privateKey) {
+        throw new Error('GCP_SERVICE_ACCOUNT_KEY missing client_email or private_key.');
+      }
+
+      // Build standard OAuth 2.0 JWT claim set for Google Cloud APIs
+      const now = Math.floor(Date.now() / 1000);
+      const header = { alg: 'RS256', typ: 'JWT' };
+      const claimSet = {
+        iss: clientEmail,
+        scope: 'https://www.googleapis.com/auth/cloud-platform',
+        aud: 'https://oauth2.googleapis.com/token',
+        exp: now + 3600,
+        iat: now
+      };
+
+      const encodedHeader = base64UrlEncode(JSON.stringify(header));
+      const encodedClaimSet = base64UrlEncode(JSON.stringify(claimSet));
+      const unsignedJwt = `${encodedHeader}.${encodedClaimSet}`;
+
+      // Sign JWT assertion using standard Node.js crypto module
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(unsignedJwt);
+      const signature = signer.sign(privateKey);
+      const encodedSignature = base64UrlEncode(signature);
+
+      const signedJwt = `${unsignedJwt}.${encodedSignature}`;
+
+      // Request fresh access token from Google OAuth endpoint
+      const tokenRes = await api.fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion: signedJwt
+        }).toString()
+      });
+
+      if (!tokenRes.ok) {
+        const tokenErrText = await tokenRes.text();
+        throw new Error(`Google OAuth token exchange failed (Status ${tokenRes.status}): ${tokenErrText}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      return tokenData.access_token;
+    } catch (err) {
+      console.error('Error deriving OAuth access token from GCP_SERVICE_ACCOUNT_KEY:', err);
+      throw err;
+    }
+  }
+
+  // Fallback to static ACCESS_TOKEN if configured
+  const staticToken = process.env.ACCESS_TOKEN;
+  if (staticToken) {
+    return staticToken;
+  }
+
+  throw new Error('No GCP authentication configured. Please set GCP_SERVICE_ACCOUNT_KEY or ACCESS_TOKEN environment variable.');
+}
 
 // 1. Start interaction (returns immediately with interactionId)
 resolver.define('startReviewStory', async (req) => {
@@ -10,7 +110,7 @@ resolver.define('startReviewStory', async (req) => {
 
     const projectId = process.env.PROJECT_ID;
     const agentId = process.env.AGENT_ID;
-    const accessToken = process.env.ACCESS_TOKEN;
+    const accessToken = await getAccessToken();
 
     const agentUrl = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/global/interactions`;
 
@@ -51,7 +151,7 @@ resolver.define('checkReviewStatus', async (req) => {
     const { interactionId } = req.payload;
 
     const projectId = process.env.PROJECT_ID;
-    const accessToken = process.env.ACCESS_TOKEN;
+    const accessToken = await getAccessToken();
 
     const getUrl = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/global/interactions/${interactionId}`;
 

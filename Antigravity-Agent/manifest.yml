@@ -27,3 +27,4 @@ permissions:
     fetch:
       backend:
         - 'aiplatform.googleapis.com'
+        - 'oauth2.googleapis.com'
