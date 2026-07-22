@@ -96,3 +96,21 @@ sequenceDiagram
 4. **Rich Text & Wiki Markup Rendering:**  
    - **UI Panel:** Renders native `@forge/react` components (`Heading`, `List`, `CodeBlock`, `Stack`, `Button`, `Inline`).
    - **Jira Comments:** Converts Markdown to Jira Wiki Markup (`h3.`, `*bold*`, `{code}`) for native rich comment rendering.
+
+---
+
+## 🏛️ Component Breakdown
+
+| Component | Technology | Primary Responsibilities |
+| :--- | :--- | :--- |
+| **Frontend UI Panel** | `@forge/react`, `@forge/bridge` | Renders issue panel, manages cache state, detects requirement changes, polls resolvers, renders UI Kit components, and displays "Re-run Agent Review" button. |
+| **Backend Resolvers** | `@forge/resolver`, `@forge/api`, `crypto` | Executes server-side RSA-256 JWT signing, exchanges assertions for OAuth access tokens, calls Agent Platform API, and handles non-blocking interaction polling. |
+| **Jira REST API** | Jira Cloud REST API v2 | Fetches issue details, reads/writes `antigravity_review` issue properties, and posts formatted Jira Wiki Markup comments. |
+| **Google Agent Platform** | Agent Platform API | Executes managed AI agent reasoning steps, streams execution thoughts, and produces story requirement reviews. |
+
+---
+
+## 🔒 Security & Egress Architecture
+
+- **Encrypted Secret Isolation:** `GCP_SERVICE_ACCOUNT_KEY` and `ACCESS_TOKEN` are stored in encrypted Forge secret storage and are only accessible inside backend FaaS resolver functions. No private keys or access tokens are ever exposed to the client browser.
+- **Strict External Egress:** Declared explicitly under `permissions.external.fetch.backend` in `manifest.yml` and restricted to `aiplatform.googleapis.com` and `oauth2.googleapis.com`.
